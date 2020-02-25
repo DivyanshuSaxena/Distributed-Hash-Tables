@@ -18,18 +18,19 @@ def add_to_dict(dict, key, val):
 
 class Node:
     """Implementation for Base Class of the Node"""
-    def __init__(self):
-        self.ip_addr = [10, 10, 0, 0]  # Default ip addr
-
-    def get_num(self):
-        return ''.join(self.ip_addr)
-
-    def set_ip(self, ip_addr):
+    def __init__(self, node_hash):
         """        
         Arguments:
-            ip_addr {array[4]} -- ip address of the node as array of 4 integers
+            node_hash {Integer} -- Hash of the node id
         """
-        self.ip_addr = ip_addr
+        self.hash = node_hash  # Default ip addr
+
+    def get_num(self):
+        """        
+        Returns:
+            Integer -- Hash of the node id
+        """
+        return self.hash
 
 
 class Network:
@@ -50,7 +51,10 @@ class Network:
                                         read (default: {'links.dat'})
         """
         self.num_nodes = 0
-        self.num_switches = num_switches  # Switches have ids 1,2,....,<num_switches>
+        self.nodes = {}
+
+        # Switches have ids 1,2,....,<num_switches>
+        self.num_switches = num_switches
 
         links = []
         if read_from_file:
@@ -88,10 +92,22 @@ class Network:
         Arguments:
             n {Node} -- Node instance to be added to the network
         """
+        self.nodes[n.get_num()] = n
         switch = random.randint(1, self.num_switches)
         while switch in self.switch_to_node.values():
             switch = random.randint(1, self.num_switches)
         self.switch_to_node[n.get_num()] = switch
+
+    def get_node(self, node_id):
+        """Get the node at node id on the nodes array
+        
+        Arguments:
+            node_id {Integer} -- Hash of the node
+        
+        Returns:
+            Node -- Associated Node
+        """
+        return self.nodes[node_id]
 
     def proximity(self, n1, n2):
         """Define the proximity metric between two Node instances on the network
@@ -99,12 +115,15 @@ class Network:
         Currently using the modulo additive inverse for the metric
         
         Arguments:
-            n1 {Node}
-            n2 {Node}
+            n1 {String} -- Hash of node n1
+            n2 {String} -- Hash of node n2
 
         Returns:
-            Integer -- the proximity metric
+            Integer -- the proximity metric (Returns -1 if node not alive)
         """
-        s1 = self.switch_to_node[n1.get_num()]
-        s2 = self.switch_to_node[n2.get_num()]
-        return abs(s2 - s1)
+        try:
+            s1 = self.switch_to_node[n1]
+            s2 = self.switch_to_node[n2]
+            return abs(s2 - s1)
+        except:
+            return -1
