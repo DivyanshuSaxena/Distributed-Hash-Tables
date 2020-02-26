@@ -13,23 +13,25 @@ if len(sys.argv) == 2:
     sys.exit(0)
 
 # Global Variables
-num_nodes = sys.argv[1]
-read_from_file = bool(sys.argv[2])
+num_nodes = int(sys.argv[1])
+read_from_file = bool(int(sys.argv[2]))
 nodes = []
 l = 6
 b = 4
 
 def init_network(network, num_nodes):
     for i in range(num_nodes):
+        print ("Adding node " + str(i))
         node_name = str(i)
         m = hashlib.sha1(node_name.encode('utf-8'))
-        node_hash = int(m.hexdigest()[:6], 16)
+        node_hash = m.hexdigest()[:6]
+        print (node_hash)
         pn = PastryNode(node_hash, l, b)
         network.add_node(pn)
-
+        pn.expanding_multicast(network)
 
 
 # Number of switches :- Max number of nodes that can be added onto the network
-num_switches = math.pow(2, 24)
+num_switches = 2000
 network = Network(num_switches, read_from_file)
-
+init_network(network, num_nodes)

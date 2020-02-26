@@ -59,6 +59,21 @@ def circular_abs(node1, node2):
     return min(abs(node1 - node2), math.pow(2, length) - abs(node1 - node2))
 
 
+def hex_code(int_val):
+    """Returns six digit hex code
+    
+    Arguments:
+        int_val {Integer}
+    
+    Returns:
+        String -- Hex String of 6 digits
+    """
+    hex_string = hex(int_val)[2:]
+    while len(hex_string) != 6:
+        hex_string = '0' + hex_string
+    ret = '0x' + hex_string
+    return ret  
+
 class PastryNode(Node):
     """Implementation Class for PastryNode, a single node instance, 
        running the Pastry Protocol"""
@@ -72,7 +87,7 @@ class PastryNode(Node):
         """
         global length, B
         super().__init__(node_hash)
-        self.L = math.pow(2, b)
+        self.L = int(math.pow(2, b))
         self.routing_table = []
         self.leaf_set = []
         self.neighborhood_set = []
@@ -81,6 +96,13 @@ class PastryNode(Node):
         for _ in range(l):
             row = [-1] * self.L
             self.routing_table.append(row)
+
+        # Update routing table to include self entry
+        hash_string = hex_code(self.get_num())[2:]
+        print (hash_string, length)
+        for index in range(length):
+            digit = hash_string[index]
+            self.routing_table[index][int(digit, 16)] = self.get_num()
 
     def get_routing_table(self):
         """Return the routing table to whoever wants this table
@@ -105,56 +127,6 @@ class PastryNode(Node):
             Array -- Leaf Set
         """
         return self.leaf_set
-
-    def node_init(self, routing_tables, leaf_set, neighborhood_set, network):
-        """Initialize routing table, leaf set and neighborhood set of a newly
-        added node
-        
-        Arguments:
-            routing_tables {Array} -- List of routing tables from A -> Z
-            leaf_set {List} -- Leaf set of Z (Numerically Closest Node)
-            neighborhood_set {List} -- Neighborhood set of A (Closest Node)
-            network {Network}
-        
-        Returns:
-            Iterable -- Iterable of nodes to which the update of this node
-            is to be sent
-        """
-        global length, B
-        # Add into leaf set
-        self.__merge_leaf_set(leaf_set)
-
-        # Select the neighborhood set
-        # Remove the farthest node, if neighborhood set is large
-        if len(neighborhood_set) > math.pow(2, B + 1):
-            farthest = -1
-            farthest_node = -1
-            for node in neighborhood_set:
-                distance = network.proximity(self.get_num(), node)
-                if distance != -1 and (farthest < distance or farthest == -1):
-                    farthest = distance
-                    farthest_node = node
-            self.neighborhood_set.remove(farthest_node)
-
-        routing_table_nodes = []
-        for index in range(length):
-            for node_index in range(self.L):
-                self.routing_table[index][node_index] = routing_tables[index][
-                    index][node_index]
-                node = self.routing_table[index][node_index]
-                if (node not in self.leaf_set) and (
-                        node not in self.neighborhood_set):
-                    routing_table_nodes.append(node)
-
-        # Update routing table to include self entry
-        hash_string = hex(self.get_num())[2:]
-        for index in range(length):
-            digit = hash_string[index]
-            self.routing_table[index][int(digit, 16)] = self.get_num()
-
-        # Send the node state to other nodes
-        return itertools.chain(routing_table_nodes, self.leaf_set,
-                               self.neighborhood_set)
 
     def __extreme_leaf_set(self, extreme):
         """Get the extremes of the current node's leaf set
@@ -248,7 +220,7 @@ class PastryNode(Node):
             get_ls_from = self.__extreme_leaf_set(1)
 
         # Get the leaf set from this node
-        leaf_node = (PastryNode)(network.get_node(get_ls_from))
+        leaf_node = (network.get_node(get_ls_from))
         self.__merge_leaf_set(leaf_node.get_leaf_set())
 
     def __repair_neighborhood_set(self, network, failed_node):
@@ -317,7 +289,7 @@ class PastryNode(Node):
             replacement = failed_node
             # Contact each of these nodes to find replacement for the failed node
             for node_hash in contact_list:
-                contact_node = (PastryNode)(network.get_node(node_hash))
+                contact_node = (network.get_node(node_hash))
                 # Check if the alternate node is alive
                 alternate_node = contact_node.get_routing_table()[l][d]
                 if network.is_alive(
@@ -352,8 +324,8 @@ class PastryNode(Node):
             return min_node
         else:
             # Not found in leaf set: route to the most suitable next node
-            l = common_prefix(hex(key_hash), hex(self.node_id))
-            digit = hex(key_hash[2:])[l]
+            l = common_prefix(hex_code(key_hash), hex_code(self.node_id))
+            digit = hex_code(key_hash[2:])[l]
             if l == length:
                 return math.pow(2, length)
             if self.routing_table[l][int(digit, 16)] != -1:
@@ -364,14 +336,14 @@ class PastryNode(Node):
                 for node in itertools.chain(self.leaf_set,
                                             self.neighborhood_set):
                     diff = circular_abs(node - key_hash)
-                    prefix = common_prefix(hex(key_hash), hex(node))
+                    prefix = common_prefix(hex_code(key_hash), hex_code(node))
                     if diff < min_diff and prefix >= l:
                         return node
                 # Check in routing table
                 for row in self.routing_table:
                     for node in row:
                         diff = circular_abs(node, key_hash)
-                        prefix = common_prefix(hex(key_hash), hex(node))
+                        prefix = common_prefix(hex_code(key_hash), hex_code(node))
                         if diff < min_diff and prefix >= l:
                             return node
                 # Key not located in the DHT
@@ -395,6 +367,50 @@ class PastryNode(Node):
             next_node = self.__route(key_hash)
         return next_node
 
+    def node_init(self, routing_tables, leaf_set, neighborhood_set, network):
+        """Initialize routing table, leaf set and neighborhood set of a newly
+        added node
+        
+        Arguments:
+            routing_tables {Array} -- List of routing tables from A -> Z
+            leaf_set {List} -- Leaf set of Z (Numerically Closest Node)
+            neighborhood_set {List} -- Neighborhood set of A (Closest Node)
+            network {Network}
+        
+        Returns:
+            Iterable -- Iterable of nodes to which the update of this node
+            is to be sent
+        """
+        global length, B
+        # Add into leaf set
+        self.__merge_leaf_set(leaf_set)
+
+        # Select the neighborhood set
+        # Remove the farthest node, if neighborhood set is large
+        if len(neighborhood_set) > math.pow(2, B + 1):
+            farthest = -1
+            farthest_node = -1
+            for node in neighborhood_set:
+                distance = network.proximity(self.get_num(), node)
+                if distance != -1 and (farthest < distance or farthest == -1):
+                    farthest = distance
+                    farthest_node = node
+            self.neighborhood_set.remove(farthest_node)
+
+        routing_table_nodes = []
+        for index in range(length):
+            for node_index in range(self.L):
+                self.routing_table[index][node_index] = routing_tables[index][
+                    index][node_index]
+                node = self.routing_table[index][node_index]
+                if (node not in self.leaf_set) and (
+                        node not in self.neighborhood_set):
+                    routing_table_nodes.append(node)
+
+        # Send the node state to other nodes
+        return itertools.chain(routing_table_nodes, self.leaf_set,
+                               self.neighborhood_set)
+
     def node_arrival(self, network, x):
         """Function Call that shall be made when node X enters the network and
            contacts current node
@@ -402,6 +418,9 @@ class PastryNode(Node):
         Arguments:
             network {Network}
             x {Integer} -- nodeId of the newly arrived node
+
+        Returns:
+            [list, list, list] -- Routing Tables, Leaf Set, Neighborhood Set
         """
         global length
         # Send all routing tables, A's neighbourhood set and Z's leaf set to X
@@ -411,14 +430,14 @@ class PastryNode(Node):
         while next_node != -1:
             # Add the routing table as many times as there are matching
             # new digits with the key
-            l = common_prefix(hex(x), hex(next_node))
-            node = (PastryNode)(network.get_node(next_node))
+            l = common_prefix(hex_code(x), hex_code(next_node))
+            node = (network.get_node(next_node))
             for i in range(l - len(routing_tables) + 1):
                 routing_tables.append(node.get_routing_table())
             z_node_id = next_node
-            next_node = next_node.route(x)
+            next_node = node.route(network, x)
         # Fill up the remaining tables in the routing table
-        z_node = (PastryNode)(network.get_node(z_node_id))
+        z_node = (network.get_node(z_node_id))
         for i in range(length - len(routing_tables)):
             routing_tables.append(z_node.get_routing_table())
 
@@ -441,8 +460,8 @@ class PastryNode(Node):
         """
         global B
         # Add into routing table, at all levels where x can be added
-        l = common_prefix(hex(x), hex(self.get_num()))
-        hash_string = hex(x)[2:]
+        l = common_prefix(hex_code(x), hex_code(self.get_num()))
+        hash_string = hex_code(x)[2:]
         for i in range(l):
             digit = hash_string[i]
             if self.routing_table[i][int(digit, 16)] == -1:
@@ -468,3 +487,22 @@ class PastryNode(Node):
             if x_distance < farthest:
                 self.neighborhood_set.remove(farthest_node)
         self.neighborhood_set.append(x)
+
+    def expanding_multicast(self, network):
+        """Implementation for expanding multicast search
+        
+        Arguments:
+            network {Network}
+        """
+        # Check till depth 10
+        for depth in range(10):
+            found_node = network.hop(self.get_num(), depth + 1)
+            if found_node != -1:
+                break
+        if found_node != -1:
+            a_node = (network.get_node(found_node))
+            r_t, l_s, n_s = a_node.node_arrival(network, self.get_num())
+            it = self.node_init(r_t, l_s, n_s, network)
+            for node_id in it:
+                node = (network.get_node(node_id))
+                node.node_update(network, self.get_num())

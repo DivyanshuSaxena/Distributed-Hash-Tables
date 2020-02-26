@@ -11,7 +11,8 @@ def add_to_dict(dict, key, val):
         val {Any Type}
     """
     if key in dict.keys():
-        dict[key].append(val)
+        if val not in dict[key]:
+            dict[key].append(val)
     else:
         dict[key] = [val]
 
@@ -21,7 +22,7 @@ class Node:
     def __init__(self, node_hash):
         """        
         Arguments:
-            node_hash {Integer} -- Hash of the node id
+            node_hash {String} -- Hash of the node id
         """
         self.hash = node_hash  # Default ip addr
 
@@ -30,14 +31,14 @@ class Node:
         Returns:
             Integer -- Hash of the node id
         """
-        return self.hash
+        return int(self.hash, 16)
 
 
 class Network:
     """Implementation of the network topology, using nodes and switches"""
     def __init__(self,
                  num_switches,
-                 read_from_file=false,
+                 read_from_file=False,
                  file_name='links.dat'):
         """Initialize the network nodes and switches
         
@@ -46,7 +47,7 @@ class Network:
 
         Keyword Arguments:
             read_from_file {boolean} -- whether to read the network connections
-                                        from given file (default: {false})
+                                        from given file (default: {False})
             file_name {str} -- file from which network connections are to be
                                         read (default: {'links.dat'})
         """
@@ -64,20 +65,20 @@ class Network:
             links = [[int(x) for x in x.trim().split(',')] for x in conn]
         else:
             # Create a ring of links and then generate random remaining links
-            max_links = random.randrange(num_switches + 1, 2 * num_switches)
-            for i in range(num_switches - 1):
-                links.append([i + 1, (i + 2) % num_switches])
-            for link in range(max_links - num_nodes + 1):
-                src = random.randint(1, num_nodes)
+            max_links = random.randrange(2 * num_switches, 4 * num_switches)
+            for i in range(num_switches):
+                links.append([i, (i + 1) % num_switches])
+            for link in range(max_links - num_switches):
+                src = random.randint(0, num_switches)
                 dest = src
                 while dest == src:
-                    dest = random.randint(1, num_nodes)
+                    dest = random.randint(0, num_switches)
                 links.append([src, dest])
 
             # Save the links in the given file
-            with open(file_name) as f:
-                for link in self.links:
-                    f.write(link[0] + ',' + link[1] + '\n')
+            with open(file_name, 'w') as f:
+                for link in links:
+                    f.write(str(link[0]) + ',' + str(link[1]) + '\n')
 
         # Generate dict of edges
         self.dict = {}
@@ -140,3 +141,35 @@ class Network:
             return abs(s2 - s1)
         except:
             return -1
+
+    def hop(self, node_id, max_depth):
+        """Hops through the network upto depth max_depth
+        
+        Arguments:
+            node_id {Integer} -- Node to start the hops from
+            max_depth {Integer} -- Maximum depth upto which search is to be made
+        
+        Returns:
+            Integer -- Node Id of the node at most max_depth hops away
+        """
+        switch = self.switch_to_node[node_id]
+        queue = self.dict[switch]
+        found_switch = -1
+        depth = 1
+        while depth <= max_depth:
+            next_queue = []
+            for next_switch in queue:
+                if next_switch in self.switch_to_node.values():
+                    found_switch = next_switch
+                    break
+                _nq = self.dict[next_switch]
+                for _sw in _nq:
+                    if _sw not in queue:
+                        next_queue.append(_sw)
+            if found_switch != -1:
+                break
+            depth += 1
+        if found_switch == -1:
+            return -1
+        return list(self.switch_to_node.keys())[list(
+            self.switch_to_node.values()).index(found_switch)]
