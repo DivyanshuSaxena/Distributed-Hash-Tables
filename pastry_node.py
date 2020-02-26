@@ -82,9 +82,11 @@ class PastryNode(Node):
             get_ls_from = min(self.leaf_set)
         else:
             get_ls_from = max(self.leaf_set)
+
         # Get the leaf set from this node
         leaf_node = (PastryNode)(network.get_node(get_ls_from))
         if is_smaller:
+            # Get fromthe min in the leaf set
             min_diff = 0
             min_node = 0
             for leaf in leaf_node.get_leaf_set():
@@ -95,6 +97,7 @@ class PastryNode(Node):
             self.leaf_set.remove(failed_node)
             self.leaf_set.append(min_node)
         else:
+            # Get from the max in the leaf set
             min_diff = 0
             min_node = 0
             for leaf in leaf_node.get_leaf_set():
@@ -105,10 +108,71 @@ class PastryNode(Node):
             self.leaf_set.remove(failed_node)
             self.leaf_set.append(min_node)
 
-    def __repair(self, network, failed_node):
+    def __repair_neighborhood_set(self, network, failed_node):
+        """Repair the neighborhood set of a node when another one fails
+        
+        Arguments:
+            network {Network}
+            failed_node {Integer} -- Hash of the node which failed
+        """
+        # Find the nearest node
+        nearest = -1
+        nearest_node = -1
+        for neighbor in self.neighborhood_set:
+            # Don't consider if the neighbor is the failed node
+            if neighbor == failed_node: continue
+            distance = network.proximity(self.get_num(), neighbor)
+            if nearest == -1 or distance < nearest:
+                nearest = distance
+                nearest_node = neighbor
+
+        # Find the nearest node that hasn't yet been included
+        neighborhood_set = network.get_node(
+            nearest_node).get_neighborhood_set()
+        nearest = -1
+        nearest_node = -1
+        for node in neighborhood_set:
+            if node not in self.neighborhood_set:
+                # Find the nearest such node
+                distance = network.proximity(self.get_num(), node)
+                if nearest == -1 or distance < nearest:
+                    nearest = distance
+                    nearest_node = node
+        self.neighborhood_set.remove(failed_node)
+        self.neighborhood_set.append(nearest_node)
+
+    def repair(self, network, failed_node):
+        # First repair leaf and neighborhood set in the wake of failed node
         if failed_node in self.leaf_set:
-            # Repair leaf set
             self.__repair_leaf_set(network, failed_node)
+        if failed_node in self.neighborhood_set:
+            self.__repair_neighborhood_set(network, failed_node)
+
+        # Find the entry in the routing table
+        l = d = 0
+        contact_list = []
+        for row_index in range(len(self.routing_table)):
+            row = self.routing_table[row_index]
+            for node_index in range(len(row)):
+                if row[node_index] == failed_node:
+                    l = row_index
+                    d = node_index
+        for node in itertools.chain(self.routing_table[l],
+                                    self.routing_table[l + 1]):
+            if node != failed_node:
+                contact_list.append(node)
+
+        replacement = failed_node
+        # Contact each of these nodes to find replacement for the failed node
+        for node_hash in contact_list:
+            contact_node = (PastryNode)(network.get_node(node_hash))
+            # Check if the alternate node is alive
+            alternate_node = contact_node.get_routing_table()[l][d]
+            if network.is_alive(
+                    alternate_node) and alternate_node != failed_node:
+                replacement = alternate_node
+                break
+        self.routing_table[l][d] = replacement
 
     def __route(self, key_hash):
         """
@@ -167,7 +231,7 @@ class PastryNode(Node):
         """
         # Check if the node is alive.
         next_node = self.__route(key_hash)
-        if network.proximity(self.get_num(), next_node) == -1:
+        if not network.is_alive(next_node):
             # Node has failed/departed. Follow repair protocol
             self.repair(network, next_node)
             next_node = self.__route(key_hash)

@@ -109,14 +109,27 @@ class Network:
         """
         return self.nodes[node_id]
 
+    def is_alive(self, n):
+        """Checks if a given node n is alive in the network
+        
+        Arguments:
+            n {Integer} -- Node Id of the node
+        
+        Returns:
+            Boolean -- True if node is alive else False
+        """
+        if n in self.nodes:
+            return True
+        return False
+
     def proximity(self, n1, n2):
         """Define the proximity metric between two Node instances on the network
         
         Currently using the modulo additive inverse for the metric
         
         Arguments:
-            n1 {String} -- Hash of node n1
-            n2 {String} -- Hash of node n2
+            n1 {Integer} -- Hash of node n1
+            n2 {Integer} -- Hash of node n2
 
         Returns:
             Integer -- the proximity metric (Returns -1 if node not alive)
