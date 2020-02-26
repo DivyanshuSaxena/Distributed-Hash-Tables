@@ -142,6 +142,12 @@ class PastryNode(Node):
         self.neighborhood_set.append(nearest_node)
 
     def repair(self, network, failed_node):
+        """Repair the leaf and neighborhoodsets and the routing table
+        
+        Arguments:
+            network {Network}
+            failed_node {Integer} -- Hash of the node which has failed
+        """
         # First repair leaf and neighborhood set in the wake of failed node
         if failed_node in self.leaf_set:
             self.__repair_leaf_set(network, failed_node)
