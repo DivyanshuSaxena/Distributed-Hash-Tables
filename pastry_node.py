@@ -149,19 +149,24 @@ class PastryNode(Node):
         """
         return self.leaf_set
 
-    def __extreme_leaf_set(self, extreme):
+    def __extreme_leaf_set(self, extreme, failed_nodes=None):
         """Get the extremes of the current node's leaf set
         
         Arguments:
             extreme {Integer} -- -1 for min (right extreme),
                                   1 for max (left extreme)
-        
+
+        Keyword Arguments:
+            failed_nodes {List} -- List of Node Ids of a failed nodes
+                                   (default: {None})
+
         Returns:
             Integer -- Node Id of the extreme node
         """
         greater_list = []
         lower_list = []
         for node in self.leaf_set:
+            if failed_nodes and node in failed_nodes: continue
             if node > self.get_num():
                 greater_list.append(node)
             else:
@@ -189,17 +194,25 @@ class PastryNode(Node):
                 else:
                     return lower_list[-self.L // 2 - 1]
 
-    def __merge_leaf_set(self, array):
+    def __merge_leaf_set(self, array, network=None, failed_nodes=None):
         """
         Merge the array into the current node's leaf set, choosing the right
         nodes.
         
         Arguments:
             array {List} -- List of leaf nodes that can potentially be added
+
+        Keyword Arguments:
+            network {Network}
+            failed_nodes {List} -- List of Node Ids of a failed nodes
+                                   (default: {None})
         """
         greater_list = []
         lower_list = []
         for node in itertools.chain(self.leaf_set, array):
+            if failed_nodes and network:
+                if node in failed_nodes or (not network.is_alive(node)):
+                    continue
             if node > self.get_num() and (node not in greater_list):
                 greater_list.append(node)
             elif node < self.get_num() and (node not in lower_list):
@@ -243,9 +256,24 @@ class PastryNode(Node):
         else:
             get_ls_from = self.__extreme_leaf_set(1)
 
-        # Get the leaf set from this node
+        # Get the leaf set from this node, if alive else search for other nodes
+        failed_nodes = [failed_node]
+        while not network.is_alive(get_ls_from):
+            failed_nodes.append(get_ls_from)
+            is_smaller = circular_between(
+                self.__extreme_leaf_set(-1, failed_nodes), failed_node,
+                self.get_num())
+            if is_smaller:
+                get_ls_from = self.__extreme_leaf_set(-1, failed_nodes)
+            else:
+                get_ls_from = self.__extreme_leaf_set(1, failed_nodes)
+
         leaf_node = (network.get_node(get_ls_from))
-        self.__merge_leaf_set(leaf_node.get_leaf_set())
+        # Delete the failed node and then, merge
+        self.leaf_set.remove(failed_node)
+        self.__merge_leaf_set(leaf_node.get_leaf_set(),
+                              network=network,
+                              failed_nodes=failed_nodes)
 
     def __repair_neighborhood_set(self, network, failed_node):
         """Repair the neighborhood set of a node when another one fails
@@ -254,12 +282,12 @@ class PastryNode(Node):
             network {Network}
             failed_node {Integer} -- Hash of the node which failed
         """
+        self.neighborhood_set.remove(failed_node)
+
         # Find the nearest node
         nearest = -1
         nearest_node = -1
         for neighbor in self.neighborhood_set:
-            # Don't consider if the neighbor is the failed node
-            if neighbor == failed_node: continue
             distance = network.proximity(self.get_num(), neighbor)
             if distance != -1 and (nearest == -1 or distance < nearest):
                 nearest = distance
@@ -277,7 +305,6 @@ class PastryNode(Node):
                 if distance != -1 and (nearest == -1 or distance < nearest):
                     nearest = distance
                     nearest_node = node
-        self.neighborhood_set.remove(failed_node)
         if nearest_node != -1:
             self.neighborhood_set.append(nearest_node)
 
@@ -307,7 +334,7 @@ class PastryNode(Node):
         if l != -1 and d != -1:
             for node in itertools.chain(self.routing_table[l],
                                         self.routing_table[l + 1]):
-                if node != failed_node:
+                if node != failed_node and network.is_alive(node):
                     contact_list.append(node)
 
             replacement = failed_node
@@ -320,7 +347,14 @@ class PastryNode(Node):
                         alternate_node) and alternate_node != failed_node:
                     replacement = alternate_node
                     break
-            self.routing_table[l][d] = replacement
+            
+            if replacement == failed_node:
+                self.routing_table[l][d] = -1
+            else:
+                self.routing_table[l][d] = replacement
+    
+        # State after repair
+        print("After repair: ", self)
 
     def __route(self, key_hash):
         """
@@ -405,10 +439,13 @@ class PastryNode(Node):
             return next_node
 
         # Check if the node is alive.
-        if next_node != -1 and (not network.is_alive(next_node)):
+        while (not network.is_alive(next_node)):
             # Node has failed/departed. Follow repair protocol
+            print('Failed Node: ' + hex_code(next_node))
             self.repair(network, next_node)
             next_node = self.__route(key_hash)
+            if next_node == int(math.pow(16, length)) or next_node == -1:
+                return next_node
         return next_node
 
     def node_init(self, routing_tables, leaf_set, neighborhood_set, network):

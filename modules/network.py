@@ -118,6 +118,22 @@ class Network:
             return True
         return False
 
+    def remove_node(self, n):
+        """Remove node with node hash n
+        
+        Arguments:
+            n {Integer} -- Node Hash of the node to be removed
+        
+        Returns:
+            Boolean -- Returns True if deleted, else False
+        """
+        if n not in self.nodes:
+            return False
+        del self.nodes[n]
+        del self.switch_to_node[n]
+        return True
+        
+
     def get_node(self, node_id):
         """Get the node at node id on the nodes array
         

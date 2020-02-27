@@ -89,10 +89,29 @@ def search_queries(network, num_queries):
         print('All queries ran successfully')
 
 
+def delete_nodes(network, del_nodes):
+    """Simulate deletion of nodes from network
+    
+    Arguments:
+        network {Network}
+        del_nodes {Integer} -- Number of nodes to be deleted
+    """
+    num_deleted = 0
+    while num_deleted < del_nodes:
+        chosen_node = random.choice(nodes)
+        del_node = int(hash_int(chosen_node), 16)
+        removed = network.remove_node(del_node)
+        if removed:
+            num_deleted += 1
+            nodes.remove(chosen_node)
+
+
 # Number of switches :- Max number of nodes that can be added onto the network
 num_switches = num_nodes
 network = Network(num_switches, read_from_file)
 
 # Initialize network
 init_network(network, num_nodes)
+search_queries(network, num_queries)
+delete_nodes(network, 50)
 search_queries(network, num_queries)
