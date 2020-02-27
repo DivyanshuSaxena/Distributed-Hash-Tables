@@ -19,12 +19,21 @@ def add_to_dict(dict, key, val):
 
 class Node:
     """Implementation for Base Class of the Node"""
-    def __init__(self, node_hash):
+    def __init__(self, node_id, node_hash):
         """        
         Arguments:
+            node_id {Integer} -- Node Id
             node_hash {String} -- Hash of the node id
         """
+        self.node_id = node_id
         self.hash = node_hash  # Default ip addr
+
+    def get_id(self):
+        """        
+        Returns:
+            Integer -- Node id
+        """
+        return self.node_id
 
     def get_num(self):
         """        

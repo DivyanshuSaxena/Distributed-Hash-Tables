@@ -80,16 +80,17 @@ def hex_code(int_val):
 class PastryNode(Node):
     """Implementation Class for PastryNode, a single node instance, 
        running the Pastry Protocol"""
-    def __init__(self, node_hash, l, b):
+    def __init__(self, node_id, node_hash, l, b):
         """Constructor for PastryNode
 
         Arguments:
-            node_hash {Integer} -- SHA1 nodeId
+            node_id {Integer} -- Network Id of the node
+            node_hash {String} -- SHA1 nodeId
             l {Integer} -- length of the SHA1 nodeId
             b {Integer} -- Pastry parameter
         """
         global length, B
-        super().__init__(node_hash)
+        super().__init__(node_id, node_hash)
         self.L = int(math.pow(2, b))
         self.routing_table = []
         self.leaf_set = []
@@ -332,9 +333,13 @@ class PastryNode(Node):
         Returns:
             Integer -- NodeId of the next node to which the request is to be
                        forwarded
-                       (returns -1 if not present and 2^length if found)
+                       (returns -1 if not present and 16^length if found)
         """
         global length
+        l = common_prefix(hex_code(key_hash), hex_code(self.get_num()))
+        if l == length:
+            return int(math.pow(16, length))
+
         # print("Running Internal Route at node " + hex_code(self.get_num()) +
         #       " to search " + hex_code(key_hash))  # Debug
         # Find if the key is in the leaf set
@@ -357,9 +362,6 @@ class PastryNode(Node):
 
         # print("Not found in leaf set") # Debug
         # Not found in leaf set: route to the most suitable next node
-        l = common_prefix(hex_code(key_hash), hex_code(self.get_num()))
-        if l == length:
-            return int(math.pow(16, length))
         digit = hex_code(key_hash)[2:][l]
         if self.routing_table[l][int(digit, 16)] != -1:
             # print("Found " + hex_code(key_hash) + " in routing table of ",
@@ -394,11 +396,12 @@ class PastryNode(Node):
         
         Returns:
             Integer -- Integer hash of the next node to ping
+                       (returns -1 if not present and 16^length if found)
         """
         global length
         next_node = self.__route(key_hash)
         # Search query found
-        if next_node == int(math.pow(16, length)):
+        if next_node == int(math.pow(16, length)) or next_node == -1:
             return next_node
 
         # Check if the node is alive.
@@ -406,7 +409,6 @@ class PastryNode(Node):
             # Node has failed/departed. Follow repair protocol
             self.repair(network, next_node)
             next_node = self.__route(key_hash)
-        # print("Next node " + hex_code(next_node))  # Debug
         return next_node
 
     def node_init(self, routing_tables, leaf_set, neighborhood_set, network):
@@ -487,9 +489,11 @@ class PastryNode(Node):
 
         Returns:
             [list, list, list] -- Routing Tables, Leaf Set, Neighborhood Set
+                                  (Returns 0 if already exists)
         """
         global length
-        # print("Running Node Arrival for node " + str(self.get_num()))  # Debug
+        # print("Running Node Arrival for key " + hex_code(x) + " on " +
+        #       hex_code(self.get_num()))  # Debug
         # Send all routing tables, A's neighbourhood set and Z's leaf set to X
         routing_tables = []
         next_node = self.get_num()
@@ -505,12 +509,14 @@ class PastryNode(Node):
                 routing_tables.append(node.get_routing_table())
             z_node_id = next_node
             next_node = node.route(network, x)
-            num_times -= 1
             if num_times == 0 or next_node == int(math.pow(16, length)):
                 break
+            num_times -= 1
+
         if num_times == 0:
-            while True:
-                pass
+            return [], [], []
+        if next_node == int(math.pow(16, length)):
+            return [self.get_id()]
 
         z_node = (network.get_node(z_node_id))
         leaf_set = z_node.get_leaf_set().copy()
@@ -583,3 +589,19 @@ class PastryNode(Node):
         print('Added node: ', end='')
         print(self)
         print('=============================================================')
+
+    def search(self, network, key):
+        """Searches the Pastry DHT for the key
+        
+        Arguments:
+            network {Network}
+            key {Integer} -- Hash that is to be searched
+        
+        Returns:
+            Integer -- Node Id of the node if present, else -1
+        """
+        r = self.node_arrival(network, key)
+        if len(r) == 1:
+            return r[0]
+        else:
+            return -1
