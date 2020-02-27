@@ -56,6 +56,10 @@ class Network:
 
         # Switches have ids 1,2,....,<num_switches>
         self.num_switches = num_switches
+        self.__proximity = []
+        for _ in range(num_switches):
+            row = [-1] * num_switches
+            self.__proximity.append(row)
 
         links = []
         if read_from_file:
@@ -144,7 +148,38 @@ class Network:
         try:
             s1 = self.switch_to_node[n1]
             s2 = self.switch_to_node[n2]
-            return abs(s2 - s1)
+
+            if self.__proximity[s1][s2] != -1:
+                return self.__proximity[s1][s2]
+
+            # bfs query
+            queue = self.dict[s1]
+            visited = {}
+            for _q in queue:
+                visited[_q] = 1
+            visited[s1] = 1
+
+            depth = 1
+            found_switch = 0
+            while len(queue) != 0:
+                next_queue = []
+                for next_switch in queue:
+                    if next_switch == s2:
+                        found_switch = 1
+                        break
+                    _nq = self.dict[next_switch]
+                    for _sw in _nq:
+                        if _sw not in visited:
+                            next_queue.append(_sw)
+                            visited[_sw] = 1
+                if found_switch != 0:
+                    break
+                depth += 1
+                queue = next_queue
+
+            self.__proximity[s1][s2] = depth
+            self.__proximity[s2][s1] = depth
+            return depth
         except:
             return -1
 
