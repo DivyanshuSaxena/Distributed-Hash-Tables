@@ -62,17 +62,17 @@ class Network:
             # Read network connections from file, if required
             with open(file_name) as f:
                 conn = f.readlines()
-            links = [[int(x) for x in x.trim().split(',')] for x in conn]
+            links = [[int(x) for x in x.strip().split(',')] for x in conn]
         else:
             # Create a ring of links and then generate random remaining links
-            max_links = random.randrange(2 * num_switches, 4 * num_switches)
+            max_links = random.randrange(8 * num_switches, 16 * num_switches)
             for i in range(num_switches):
                 links.append([i, (i + 1) % num_switches])
             for link in range(max_links - num_switches):
-                src = random.randint(0, num_switches)
+                src = random.randint(0, num_switches - 1)
                 dest = src
                 while dest == src:
-                    dest = random.randint(0, num_switches)
+                    dest = random.randint(0, num_switches - 1)
                 links.append([src, dest])
 
             # Save the links in the given file
@@ -92,12 +92,18 @@ class Network:
         
         Arguments:
             n {Node} -- Node instance to be added to the network
+        
+        Returns:
+            Boolean -- Returns True if node could be added
         """
-        self.nodes[n.get_num()] = n
-        switch = random.randint(1, self.num_switches)
-        while switch in self.switch_to_node.values():
-            switch = random.randint(1, self.num_switches)
-        self.switch_to_node[n.get_num()] = switch
+        if n.get_num() not in self.nodes:
+            self.nodes[n.get_num()] = n
+            switch = random.randint(0, self.num_switches - 1)
+            while switch in self.switch_to_node.values():
+                switch = random.randint(0, self.num_switches - 1)
+            self.switch_to_node[n.get_num()] = switch
+            return True
+        return False
 
     def get_node(self, node_id):
         """Get the node at node id on the nodes array
@@ -153,7 +159,13 @@ class Network:
             Integer -- Node Id of the node at most max_depth hops away
         """
         switch = self.switch_to_node[node_id]
+
+        # bfs query
+        visited = {}
         queue = self.dict[switch]
+        for _q in queue:
+            visited[_q] = 1
+        visited[switch] = 1
         found_switch = -1
         depth = 1
         while depth <= max_depth:
@@ -164,11 +176,13 @@ class Network:
                     break
                 _nq = self.dict[next_switch]
                 for _sw in _nq:
-                    if _sw not in queue:
+                    if _sw not in visited:
                         next_queue.append(_sw)
+                        visited[_sw] = 1
             if found_switch != -1:
                 break
             depth += 1
+            queue = next_queue
         if found_switch == -1:
             return -1
         return list(self.switch_to_node.keys())[list(

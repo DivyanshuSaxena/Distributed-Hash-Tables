@@ -1,5 +1,6 @@
 """Class Definition for PastryNode"""
 import math
+import time
 import hashlib
 import itertools
 from modules.network import Node, Network
@@ -56,7 +57,7 @@ def circular_abs(node1, node2):
         Integer -- Circular Absolute Difference
     """
     global length
-    return min(abs(node1 - node2), math.pow(2, length) - abs(node1 - node2))
+    return min(abs(node1 - node2), math.pow(16, length) - abs(node1 - node2))
 
 
 def hex_code(int_val):
@@ -66,13 +67,15 @@ def hex_code(int_val):
         int_val {Integer}
     
     Returns:
-        String -- Hex String of 6 digits
+        String -- Hex String of length digits
     """
+    global length
     hex_string = hex(int_val)[2:]
-    while len(hex_string) != 6:
+    while len(hex_string) != length:
         hex_string = '0' + hex_string
     ret = '0x' + hex_string
-    return ret  
+    return ret
+
 
 class PastryNode(Node):
     """Implementation Class for PastryNode, a single node instance, 
@@ -99,10 +102,27 @@ class PastryNode(Node):
 
         # Update routing table to include self entry
         hash_string = hex_code(self.get_num())[2:]
-        print (hash_string, length)
         for index in range(length):
             digit = hash_string[index]
             self.routing_table[index][int(digit, 16)] = self.get_num()
+
+    def __str__(self):
+        """Print the PastryNode instance"""
+        print(
+            '\n-------------------------------------------------------------')
+        print('PastryNode: ' + str(self.get_num()) + ' | ' +
+              hex_code(self.get_num()))
+        ls_string = [hex_code(x)[2:] for x in self.leaf_set]
+        print('Leaf Set: ' + str(ls_string))
+        for row in self.routing_table:
+            for entry in row:
+                if entry != -1:
+                    print(hex_code(entry)[2:], end='\t')
+                else:
+                    print(-1, end='\t')
+            print('\n')
+        print('-------------------------------------------------------------')
+        return ''
 
     def get_routing_table(self):
         """Return the routing table to whoever wants this table
@@ -150,20 +170,23 @@ class PastryNode(Node):
 
         if len(greater_list) + len(lower_list) < self.L:
             if extreme == -1:
-                return lower_list[0]
+                if len(lower_list) != 0:
+                    return lower_list[0]
             else:
-                return greater_list[-1]
+                if len(greater_list) != 0:
+                    return greater_list[-1]
+            return self.get_num()
         else:
             if extreme == -1:
                 if len(lower_list) >= self.L / 2:
-                    return lower_list[-self.L / 2]
+                    return lower_list[-self.L // 2]
                 else:
-                    return greater_list[self.L / 2]
+                    return greater_list[self.L // 2]
             else:
                 if len(greater_list) >= self.L / 2:
-                    return greater_list[self.L / 2 - 1]
+                    return greater_list[self.L // 2 - 1]
                 else:
-                    return lower_list[-self.L / 2 - 1]
+                    return lower_list[-self.L // 2 - 1]
 
     def __merge_leaf_set(self, array):
         """
@@ -176,9 +199,9 @@ class PastryNode(Node):
         greater_list = []
         lower_list = []
         for node in itertools.chain(self.leaf_set, array):
-            if node > self.get_num():
+            if node > self.get_num() and (node not in greater_list):
                 greater_list.append(node)
-            else:
+            elif node < self.get_num() and (node not in lower_list):
                 lower_list.append(node)
         greater_list.sort()
         lower_list.sort()
@@ -189,17 +212,17 @@ class PastryNode(Node):
             self.leaf_set = greater_list
         else:
             if len(greater_list) < self.L / 2:
-                num_needed = self.L / 2 - len(greater_list)
+                num_needed = int(self.L / 2 - len(greater_list))
                 greater_list.extend(lower_list[:num_needed])
                 lower_list = lower_list[num_needed:]
             if len(lower_list) < self.L / 2:
-                num_needed = self.L / 2 - len(lower_list)
+                num_needed = int(self.L / 2 - len(lower_list))
                 lower_list.extend(greater_list[-num_needed:])
                 greater_list = greater_list[:-num_needed]
             if len(greater_list) > self.L / 2:
-                greater_list = greater_list[:self.L / 2]
+                greater_list = greater_list[:self.L // 2]
             if len(lower_list) > self.L / 2:
-                lower_list = lower_list[-self.L / 2:]
+                lower_list = lower_list[-self.L // 2:]
             greater_list.extend(lower_list)
             self.leaf_set = greater_list
 
@@ -312,42 +335,55 @@ class PastryNode(Node):
                        (returns -1 if not present and 2^length if found)
         """
         global length
+        # print("Running Internal Route at node " + hex_code(self.get_num()) +
+        #       " to search " + hex_code(key_hash))  # Debug
         # Find if the key is in the leaf set
+        ls_string = [hex_code(x)[2:] for x in self.leaf_set]
         if circular_between(self.__extreme_leaf_set(-1), key_hash,
                             self.__extreme_leaf_set(1)):
             min_diff = -1
             min_node = 0x0
+            diff_arr = []
             for node in self.leaf_set:
+                diff_arr.append(circular_abs(node, key_hash))
                 if circular_abs(node, key_hash) < min_diff or min_diff == -1:
                     min_diff = circular_abs(node, key_hash)
                     min_node = node
-            return min_node
+            # Route only if min_node is closer than current node
+            diff = circular_abs(self.get_num(), key_hash)
+            if diff > min_diff:
+                return min_node
+            return -1
+
+        # print("Not found in leaf set") # Debug
+        # Not found in leaf set: route to the most suitable next node
+        l = common_prefix(hex_code(key_hash), hex_code(self.get_num()))
+        if l == length:
+            return int(math.pow(16, length))
+        digit = hex_code(key_hash)[2:][l]
+        if self.routing_table[l][int(digit, 16)] != -1:
+            # print("Found " + hex_code(key_hash) + " in routing table of ",
+            #       hex_code(self.get_num()),
+            #       hex_code(self.routing_table[l][int(digit, 16)]), l,
+            #       digit)  # Debug
+            return self.routing_table[l][int(digit, 16)]
         else:
-            # Not found in leaf set: route to the most suitable next node
-            l = common_prefix(hex_code(key_hash), hex_code(self.node_id))
-            digit = hex_code(key_hash[2:])[l]
-            if l == length:
-                return math.pow(2, length)
-            if self.routing_table[l][int(digit, 16)] != -1:
-                return self.routing_table[l][int(digit, 16)]
-            else:
-                min_diff = circular_abs(self.node_id, key_hash)
-                # Check in leaf set and neighbourhood set
-                for node in itertools.chain(self.leaf_set,
-                                            self.neighborhood_set):
-                    diff = circular_abs(node - key_hash)
+            min_diff = circular_abs(self.get_num(), key_hash)
+            # Check in leaf set and neighbourhood set
+            for node in itertools.chain(self.leaf_set, self.neighborhood_set):
+                diff = circular_abs(node, key_hash)
+                prefix = common_prefix(hex_code(key_hash), hex_code(node))
+                if diff < min_diff and prefix >= l:
+                    return node
+            # Check in routing table
+            for row in self.routing_table:
+                for node in row:
+                    diff = circular_abs(node, key_hash)
                     prefix = common_prefix(hex_code(key_hash), hex_code(node))
                     if diff < min_diff and prefix >= l:
                         return node
-                # Check in routing table
-                for row in self.routing_table:
-                    for node in row:
-                        diff = circular_abs(node, key_hash)
-                        prefix = common_prefix(hex_code(key_hash), hex_code(node))
-                        if diff < min_diff and prefix >= l:
-                            return node
-                # Key not located in the DHT
-                return -1
+            # Key not located in the DHT
+            return -1
 
     def route(self, network, key_hash):
         """Public Function to route the request to the next node
@@ -359,12 +395,18 @@ class PastryNode(Node):
         Returns:
             Integer -- Integer hash of the next node to ping
         """
-        # Check if the node is alive.
+        global length
         next_node = self.__route(key_hash)
+        # Search query found
+        if next_node == int(math.pow(16, length)):
+            return next_node
+
+        # Check if the node is alive.
         if next_node != -1 and (not network.is_alive(next_node)):
             # Node has failed/departed. Follow repair protocol
             self.repair(network, next_node)
             next_node = self.__route(key_hash)
+        # print("Next node " + hex_code(next_node))  # Debug
         return next_node
 
     def node_init(self, routing_tables, leaf_set, neighborhood_set, network):
@@ -385,6 +427,14 @@ class PastryNode(Node):
         # Add into leaf set
         self.__merge_leaf_set(leaf_set)
 
+        # Also fetch from extreme nodes
+        min_extreme = self.__extreme_leaf_set(-1)
+        max_extreme = self.__extreme_leaf_set(1)
+        min_node = network.get_node(min_extreme)
+        max_node = network.get_node(max_extreme)
+        self.__merge_leaf_set(min_node.get_leaf_set())
+        self.__merge_leaf_set(max_node.get_leaf_set())
+
         # Select the neighborhood set
         # Remove the farthest node, if neighborhood set is large
         if len(neighborhood_set) > math.pow(2, B + 1):
@@ -395,17 +445,33 @@ class PastryNode(Node):
                 if distance != -1 and (farthest < distance or farthest == -1):
                     farthest = distance
                     farthest_node = node
-            self.neighborhood_set.remove(farthest_node)
+            neighborhood_set.remove(farthest_node)
+        self.neighborhood_set = neighborhood_set
 
+        # Update from the routing tables received
         routing_table_nodes = []
-        for index in range(length):
+        for index in range(len(routing_tables)):
             for node_index in range(self.L):
                 self.routing_table[index][node_index] = routing_tables[index][
                     index][node_index]
                 node = self.routing_table[index][node_index]
-                if (node not in self.leaf_set) and (
+                if (node != -1) and (node not in self.leaf_set) and (
                         node not in self.neighborhood_set):
                     routing_table_nodes.append(node)
+
+        # Update leaf_set and neighborhood_set nodes in routing table
+        for node in itertools.chain(leaf_set, neighborhood_set):
+            l = common_prefix(hex_code(node), hex_code(self.get_num()))
+            # If match till lth level, add in routing table
+            digit = hex_code(node)[2:][l]
+            if l >= 1 and self.routing_table[l][int(digit, 16)] == -1:
+                self.routing_table[l][int(digit, 16)] = node
+
+        # Update routing table to include self entry
+        hash_string = hex_code(self.get_num())[2:]
+        for index in range(length):
+            digit = hash_string[index]
+            self.routing_table[index][int(digit, 16)] = self.get_num()
 
         # Send the node state to other nodes
         return itertools.chain(routing_table_nodes, self.leaf_set,
@@ -423,10 +489,13 @@ class PastryNode(Node):
             [list, list, list] -- Routing Tables, Leaf Set, Neighborhood Set
         """
         global length
+        # print("Running Node Arrival for node " + str(self.get_num()))  # Debug
         # Send all routing tables, A's neighbourhood set and Z's leaf set to X
         routing_tables = []
         next_node = self.get_num()
         z_node_id = next_node
+
+        num_times = 32
         while next_node != -1:
             # Add the routing table as many times as there are matching
             # new digits with the key
@@ -436,11 +505,14 @@ class PastryNode(Node):
                 routing_tables.append(node.get_routing_table())
             z_node_id = next_node
             next_node = node.route(network, x)
-        # Fill up the remaining tables in the routing table
-        z_node = (network.get_node(z_node_id))
-        for i in range(length - len(routing_tables)):
-            routing_tables.append(z_node.get_routing_table())
+            num_times -= 1
+            if num_times == 0 or next_node == int(math.pow(16, length)):
+                break
+        if num_times == 0:
+            while True:
+                pass
 
+        z_node = (network.get_node(z_node_id))
         leaf_set = z_node.get_leaf_set().copy()
         neighborhood_set = self.get_neighborhood_set().copy()
 
@@ -448,7 +520,7 @@ class PastryNode(Node):
         # respective nodes.
         leaf_set.append(z_node.get_num())
         neighborhood_set.append(self.get_num())
-        return leaf_set, neighborhood_set, routing_tables
+        return routing_tables, leaf_set, neighborhood_set
 
     def node_update(self, network, x):
         """Update Routing Table, Leaf Set and Neighborhood Set when a new node
@@ -494,15 +566,20 @@ class PastryNode(Node):
         Arguments:
             network {Network}
         """
-        # Check till depth 10
-        for depth in range(10):
+        # Check till depth 500
+        for depth in range(500):
             found_node = network.hop(self.get_num(), depth + 1)
             if found_node != -1:
                 break
+
         if found_node != -1:
             a_node = (network.get_node(found_node))
             r_t, l_s, n_s = a_node.node_arrival(network, self.get_num())
             it = self.node_init(r_t, l_s, n_s, network)
-            for node_id in it:
+            list_it = list(set(it))
+            for node_id in list_it:
                 node = (network.get_node(node_id))
                 node.node_update(network, self.get_num())
+        print('Added node: ', end='')
+        print(self)
+        print('=============================================================')
