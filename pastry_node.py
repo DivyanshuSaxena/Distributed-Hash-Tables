@@ -80,17 +80,18 @@ def hex_code(int_val):
 class PastryNode(Node):
     """Implementation Class for PastryNode, a single node instance, 
        running the Pastry Protocol"""
-    def __init__(self, node_id, node_hash, l, b):
+    def __init__(self, node_id, node_hash, network, l, b):
         """Constructor for PastryNode
 
         Arguments:
             node_id {Integer} -- Network Id of the node
             node_hash {String} -- SHA1 nodeId
+            network {Network}
             l {Integer} -- length of the SHA1 nodeId
             b {Integer} -- Pastry parameter
         """
         global length, B
-        super().__init__(node_id, node_hash)
+        super().__init__(node_id, node_hash, network)
         self.L = int(math.pow(2, b))
         self.routing_table = []
         self.leaf_set = []
@@ -194,7 +195,7 @@ class PastryNode(Node):
                 else:
                     return lower_list[-self.L // 2 - 1]
 
-    def __merge_leaf_set(self, array, network=None, failed_nodes=None):
+    def __merge_leaf_set(self, array, failed_nodes=None):
         """
         Merge the array into the current node's leaf set, choosing the right
         nodes.
@@ -203,15 +204,15 @@ class PastryNode(Node):
             array {List} -- List of leaf nodes that can potentially be added
 
         Keyword Arguments:
-            network {Network}
             failed_nodes {List} -- List of Node Ids of a failed nodes
                                    (default: {None})
         """
         greater_list = []
         lower_list = []
         for node in itertools.chain(self.leaf_set, array):
-            if failed_nodes and network:
-                if node in failed_nodes or (not network.is_alive(node)):
+            if failed_nodes:
+                if node in failed_nodes or (
+                        not self.network_api.is_alive(node)):
                     continue
             if node > self.get_num() and (node not in greater_list):
                 greater_list.append(node)
@@ -240,11 +241,10 @@ class PastryNode(Node):
             greater_list.extend(lower_list)
             self.leaf_set = greater_list
 
-    def __repair_leaf_set(self, network, failed_node):
+    def __repair_leaf_set(self, failed_node):
         """Repair the leaf set of a node when a node in leaf set fails
         
         Arguments:
-            network {Network}
             failed_node {Integer} -- Hash of the node which failed
         """
         # Find on which side the failed node is, in the leaf set
@@ -258,7 +258,7 @@ class PastryNode(Node):
 
         # Get the leaf set from this node, if alive else search for other nodes
         failed_nodes = [failed_node]
-        while not network.is_alive(get_ls_from):
+        while not self.network_api.is_alive(get_ls_from):
             failed_nodes.append(get_ls_from)
             is_smaller = circular_between(
                 self.__extreme_leaf_set(-1, failed_nodes), failed_node,
@@ -268,18 +268,16 @@ class PastryNode(Node):
             else:
                 get_ls_from = self.__extreme_leaf_set(1, failed_nodes)
 
-        leaf_node = (network.get_node(get_ls_from))
+        leaf_node = (self.network_api.get_node(get_ls_from))
         # Delete the failed node and then, merge
         self.leaf_set.remove(failed_node)
         self.__merge_leaf_set(leaf_node.get_leaf_set(),
-                              network=network,
                               failed_nodes=failed_nodes)
 
-    def __repair_neighborhood_set(self, network, failed_node):
+    def __repair_neighborhood_set(self, failed_node):
         """Repair the neighborhood set of a node when another one fails
         
         Arguments:
-            network {Network}
             failed_node {Integer} -- Hash of the node which failed
         """
         self.neighborhood_set.remove(failed_node)
@@ -288,39 +286,38 @@ class PastryNode(Node):
         nearest = -1
         nearest_node = -1
         for neighbor in self.neighborhood_set:
-            distance = network.proximity(self.get_num(), neighbor)
+            distance = self.network_api.proximity(self.get_num(), neighbor)
             if distance != -1 and (nearest == -1 or distance < nearest):
                 nearest = distance
                 nearest_node = neighbor
 
         # Find the nearest node that hasn't yet been included
-        neighborhood_set = network.get_node(
+        neighborhood_set = self.network_api.get_node(
             nearest_node).get_neighborhood_set()
         nearest = -1
         nearest_node = -1
         for node in neighborhood_set:
             if node not in self.neighborhood_set:
                 # Find the nearest such node
-                distance = network.proximity(self.get_num(), node)
+                distance = self.network_api.proximity(self.get_num(), node)
                 if distance != -1 and (nearest == -1 or distance < nearest):
                     nearest = distance
                     nearest_node = node
         if nearest_node != -1:
             self.neighborhood_set.append(nearest_node)
 
-    def repair(self, network, failed_node):
+    def __repair(self, failed_node):
         """Repair the leaf and neighborhoodsets and the routing table
         
         Arguments:
-            network {Network}
             failed_node {Integer} -- Hash of the node which has failed
         """
         global length
         # First repair leaf and neighborhood set in the wake of failed node
         if failed_node in self.leaf_set:
-            self.__repair_leaf_set(network, failed_node)
+            self.__repair_leaf_set(failed_node)
         if failed_node in self.neighborhood_set:
-            self.__repair_neighborhood_set(network, failed_node)
+            self.__repair_neighborhood_set(failed_node)
 
         # Find the entry in the routing table
         l = d = -1
@@ -334,16 +331,16 @@ class PastryNode(Node):
         if l != -1 and d != -1:
             for node in itertools.chain(self.routing_table[l],
                                         self.routing_table[l + 1]):
-                if node != failed_node and network.is_alive(node):
+                if node != failed_node and self.network_api.is_alive(node):
                     contact_list.append(node)
 
             replacement = failed_node
             # Contact each of these nodes to find replacement for the failed node
             for node_hash in contact_list:
-                contact_node = (network.get_node(node_hash))
+                contact_node = (self.network_api.get_node(node_hash))
                 # Check if the alternate node is alive
                 alternate_node = contact_node.get_routing_table()[l][d]
-                if network.is_alive(
+                if self.network_api.is_alive(
                         alternate_node) and alternate_node != failed_node:
                     replacement = alternate_node
                     break
@@ -421,11 +418,10 @@ class PastryNode(Node):
             # Key not located in the DHT
             return -1
 
-    def route(self, network, key_hash):
+    def route(self, key_hash):
         """Public Function to route the request to the next node
         
         Arguments:
-            network {Network} -- Pastry Network instance
             key_hash {String} -- Hash of the key to be searched
         
         Returns:
@@ -439,16 +435,16 @@ class PastryNode(Node):
             return next_node
 
         # Check if the node is alive.
-        while (not network.is_alive(next_node)):
+        while (not self.network_api.is_alive(next_node)):
             # Node has failed/departed. Follow repair protocol
             # print('Failed Node: ' + hex_code(next_node))
-            self.repair(network, next_node)
+            self.__repair(next_node)
             next_node = self.__route(key_hash)
             if next_node == int(math.pow(16, length)) or next_node == -1:
                 return next_node
         return next_node
 
-    def node_init(self, routing_tables, leaf_set, neighborhood_set, network):
+    def node_init(self, routing_tables, leaf_set, neighborhood_set):
         """Initialize routing table, leaf set and neighborhood set of a newly
         added node
         
@@ -456,7 +452,6 @@ class PastryNode(Node):
             routing_tables {Array} -- List of routing tables from A -> Z
             leaf_set {List} -- Leaf set of Z (Numerically Closest Node)
             neighborhood_set {List} -- Neighborhood set of A (Closest Node)
-            network {Network}
         
         Returns:
             Iterable -- Iterable of nodes to which the update of this node
@@ -469,8 +464,8 @@ class PastryNode(Node):
         # Also fetch from extreme nodes
         min_extreme = self.__extreme_leaf_set(-1)
         max_extreme = self.__extreme_leaf_set(1)
-        min_node = network.get_node(min_extreme)
-        max_node = network.get_node(max_extreme)
+        min_node = self.network_api.get_node(min_extreme)
+        max_node = self.network_api.get_node(max_extreme)
         self.__merge_leaf_set(min_node.get_leaf_set())
         self.__merge_leaf_set(max_node.get_leaf_set())
 
@@ -480,7 +475,7 @@ class PastryNode(Node):
             farthest = -1
             farthest_node = -1
             for node in neighborhood_set:
-                distance = network.proximity(self.get_num(), node)
+                distance = self.network_api.proximity(self.get_num(), node)
                 if distance != -1 and (farthest < distance or farthest == -1):
                     farthest = distance
                     farthest_node = node
@@ -516,12 +511,11 @@ class PastryNode(Node):
         return itertools.chain(routing_table_nodes, self.leaf_set,
                                self.neighborhood_set)
 
-    def node_arrival(self, network, x):
+    def node_arrival(self, x):
         """Function Call that shall be made when node X enters the network and
            contacts current node
         
         Arguments:
-            network {Network}
             x {Integer} -- nodeId of the newly arrived node
 
         Returns:
@@ -542,16 +536,16 @@ class PastryNode(Node):
             # Add the routing table as many times as there are matching
             # new digits with the key
             l = common_prefix(hex_code(x), hex_code(next_node))
-            node = (network.get_node(next_node))
+            node = (self.network_api.get_node(next_node))
             for i in range(l - len(routing_tables) + 1):
                 routing_tables.append(node.get_routing_table())
             z_node_id = next_node
-            next_node = node.route(network, x)
+            next_node = node.route(x)
             if num_times == 0 or next_node == int(math.pow(16, length)):
                 break
             num_times -= 1
 
-        z_node = (network.get_node(z_node_id))
+        z_node = (self.network_api.get_node(z_node_id))
         if num_times == 0:
             return (32 - num_times), [], [], []
         if next_node == int(math.pow(16, length)):
@@ -566,12 +560,11 @@ class PastryNode(Node):
         neighborhood_set.append(self.get_num())
         return (32 - num_times), routing_tables, leaf_set, neighborhood_set
 
-    def node_update(self, network, x):
+    def node_update(self, x):
         """Update Routing Table, Leaf Set and Neighborhood Set when a new node
         is added to the network
         
         Arguments:
-            network {Network}
             x {Integer} -- Hash of the new node that has been added
         """
         global B
@@ -593,47 +586,41 @@ class PastryNode(Node):
         farthest = -1
         farthest_node = -1
         for node in self.neighborhood_set:
-            distance = network.proximity(self.get_num(), node)
+            distance = self.network_api.proximity(self.get_num(), node)
             if distance != -1 and (farthest < distance or farthest == -1):
                 farthest = distance
                 farthest_node = node
         # Replace the farthest node, if node is nearer and set is large enough
         if len(self.neighborhood_set) > math.pow(2, B + 1):
-            x_distance = network.proximity(self.get_num(), x)
+            x_distance = self.network_api.proximity(self.get_num(), x)
             if x_distance < farthest:
                 self.neighborhood_set.remove(farthest_node)
         self.neighborhood_set.append(x)
 
-    def expanding_multicast(self, network):
-        """Implementation for expanding multicast search
-        
-        Arguments:
-            network {Network}
-        """
+    def join(self):
+        """Implementation for expanding multicast search"""
         # Check till depth 500
         for depth in range(500):
-            found_node = network.hop(self.get_num(), depth + 1)
+            found_node = self.network_api.hop(self.get_num(), depth + 1)
             if found_node != -1:
                 break
 
         if found_node != -1:
-            a_node = (network.get_node(found_node))
-            num_hops, r_t, l_s, n_s = a_node.node_arrival(
-                network, self.get_num())
-            it = self.node_init(r_t, l_s, n_s, network)
+            a_node = (self.network_api.get_node(found_node))
+            num_hops, r_t, l_s, n_s = a_node.node_arrival(self.get_num())
+            it = self.node_init(r_t, l_s, n_s)
             list_it = list(set(it))
             for node_id in list_it:
-                node = (network.get_node(node_id))
-                node.node_update(network, self.get_num())
+                node = (self.network_api.get_node(node_id))
+                node.node_update(self.get_num())
         print('Added node: ', end='')
         print(self)
         print('=============================================================')
 
-    def search(self, network, key):
+    def search(self, key):
         """Searches the Pastry DHT for the key
         
         Arguments:
-            network {Network}
             key {Integer} -- Node that is to be searched
         
         Returns:
@@ -644,7 +631,7 @@ class PastryNode(Node):
         name = str(key)
         m = hashlib.sha1(name.encode('utf-8'))
         key_hash = m.hexdigest()[:length]
-        r = self.node_arrival(network, int(key_hash, 16))
+        r = self.node_arrival(int(key_hash, 16))
         if len(r) == 2:
             return r[1]
         else:

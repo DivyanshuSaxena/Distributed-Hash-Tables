@@ -19,14 +19,16 @@ def add_to_dict(dict, key, val):
 
 class Node:
     """Implementation for Base Class of the Node"""
-    def __init__(self, node_id, node_hash):
+    def __init__(self, node_id, node_hash, network):
         """        
         Arguments:
             node_id {Integer} -- Node Id
             node_hash {String} -- Hash of the node id
+            network {Network}
         """
         self.node_id = node_id
-        self.hash = node_hash  # Default ip addr
+        self.hash = node_hash
+        self.network_api = network
 
     def get_id(self):
         """        
@@ -132,7 +134,6 @@ class Network:
         del self.nodes[n]
         del self.switch_to_node[n]
         return True
-        
 
     def get_node(self, node_id):
         """Get the node at node id on the nodes array

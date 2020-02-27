@@ -51,10 +51,10 @@ def init_network(network, num_nodes):
         node_hash = hash_int(i)
         print(node_hash)
 
-        pn = PastryNode(i, node_hash, l, b)
+        pn = PastryNode(i, node_hash, network, l, b)
         is_added = network.add_node(pn)
         if is_added:
-            pn.expanding_multicast(network)
+            pn.join()
             num_added += 1
             nodes.append(i)
         if num_added == num_nodes:
@@ -78,7 +78,7 @@ def search_queries(network, num_queries):
         q_hash = hash_int(q)
         hit_node = int(hash_int(random.choice(nodes)), 16)
         node = network.get_node(hit_node)
-        found = node.search(network, q)
+        found = node.search(q)
         in_list = q in nodes
         if (in_list and found != -1) or (not in_list and found == -1):
             continue
