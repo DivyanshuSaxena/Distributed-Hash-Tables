@@ -347,14 +347,14 @@ class PastryNode(Node):
                         alternate_node) and alternate_node != failed_node:
                     replacement = alternate_node
                     break
-            
+
             if replacement == failed_node:
                 self.routing_table[l][d] = -1
             else:
                 self.routing_table[l][d] = replacement
-    
+
         # State after repair
-        print("After repair: ", self)
+        # print("After repair: ", self)  # Debug
 
     def __route(self, key_hash):
         """
@@ -441,7 +441,7 @@ class PastryNode(Node):
         # Check if the node is alive.
         while (not network.is_alive(next_node)):
             # Node has failed/departed. Follow repair protocol
-            print('Failed Node: ' + hex_code(next_node))
+            # print('Failed Node: ' + hex_code(next_node))
             self.repair(network, next_node)
             next_node = self.__route(key_hash)
             if next_node == int(math.pow(16, length)) or next_node == -1:
@@ -525,8 +525,9 @@ class PastryNode(Node):
             x {Integer} -- nodeId of the newly arrived node
 
         Returns:
-            [list, list, list] -- Routing Tables, Leaf Set, Neighborhood Set
-                                  (Returns 0 if already exists)
+            [Integer, list, list, list] --
+                Num hops, Routing Tables, Leaf Set, Neighborhood Set
+                (Returns the id if already exists)
         """
         global length
         # print("Running Node Arrival for key " + hex_code(x) + " on " +
@@ -550,12 +551,12 @@ class PastryNode(Node):
                 break
             num_times -= 1
 
-        if num_times == 0:
-            return [], [], []
-        if next_node == int(math.pow(16, length)):
-            return [self.get_id()]
-
         z_node = (network.get_node(z_node_id))
+        if num_times == 0:
+            return (32 - num_times), [], [], []
+        if next_node == int(math.pow(16, length)):
+            return (32 - num_times), [z_node.get_id()]
+
         leaf_set = z_node.get_leaf_set().copy()
         neighborhood_set = self.get_neighborhood_set().copy()
 
@@ -563,7 +564,7 @@ class PastryNode(Node):
         # respective nodes.
         leaf_set.append(z_node.get_num())
         neighborhood_set.append(self.get_num())
-        return routing_tables, leaf_set, neighborhood_set
+        return (32 - num_times), routing_tables, leaf_set, neighborhood_set
 
     def node_update(self, network, x):
         """Update Routing Table, Leaf Set and Neighborhood Set when a new node
@@ -617,7 +618,8 @@ class PastryNode(Node):
 
         if found_node != -1:
             a_node = (network.get_node(found_node))
-            r_t, l_s, n_s = a_node.node_arrival(network, self.get_num())
+            num_hops, r_t, l_s, n_s = a_node.node_arrival(
+                network, self.get_num())
             it = self.node_init(r_t, l_s, n_s, network)
             list_it = list(set(it))
             for node_id in list_it:
@@ -632,13 +634,18 @@ class PastryNode(Node):
         
         Arguments:
             network {Network}
-            key {Integer} -- Hash that is to be searched
+            key {Integer} -- Node that is to be searched
         
         Returns:
-            Integer -- Node Id of the node if present, else -1
+            [Integer, Integer] -- Num hops, Node Id of the node if present,
+                                  else -1
         """
-        r = self.node_arrival(network, key)
-        if len(r) == 1:
-            return r[0]
+        global length
+        name = str(key)
+        m = hashlib.sha1(name.encode('utf-8'))
+        key_hash = m.hexdigest()[:length]
+        r = self.node_arrival(network, int(key_hash, 16))
+        if len(r) == 2:
+            return r[1]
         else:
             return -1
