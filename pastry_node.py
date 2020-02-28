@@ -633,6 +633,6 @@ class PastryNode(Node):
         key_hash = m.hexdigest()[:length]
         r = self.node_arrival(int(key_hash, 16))
         if len(r) == 2:
-            return r[1]
+            return r[0], r[1]
         else:
-            return -1
+            return r[0], -1

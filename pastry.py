@@ -78,7 +78,7 @@ def search_queries(network, num_queries):
         q_hash = hash_int(q)
         hit_node = int(hash_int(random.choice(nodes)), 16)
         node = network.get_node(hit_node)
-        found = node.search(q)
+        hops, found = node.search(q)
         in_list = q in nodes
         if (in_list and found != -1) or (not in_list and found == -1):
             continue
