@@ -128,8 +128,8 @@ def delete_nodes(network, del_nodes):
     num_deleted = 0
     while num_deleted < del_nodes:
         chosen_node = random.choice(nodes)
-        del_node = int(hash_int(chosen_node), 16)
-        removed = network.remove_node(del_node)
+        del_node = network.get_node(int(hash_int(chosen_node), 16))
+        removed = del_node.depart_network()
         if removed:
             num_deleted += 1
             nodes.remove(chosen_node)

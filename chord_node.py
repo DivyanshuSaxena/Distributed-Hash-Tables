@@ -126,14 +126,15 @@ class ChordNode(Node):
             key {Integer} -- Key to be searched
         
         Returns:
-            Integer -- Node Id of the next closest finger
+            Integer, Integer -- Node Id of the next closest finger,
+                                the entry in the finger table
         """
         global M
         for i in range(M, 0, -1):
             if circular_between(self.get_num(),
                                 self.finger_table[i - 1]['node'], key):
-                return self.finger_table[i - 1]['node']
-        return self.get_num()
+                return self.finger_table[i - 1]['node'], i - 1
+        return self.get_num(), 0
 
     def find_predecessor(self, key):
         """Find the predecessor of key, as per information with current node
@@ -174,21 +175,17 @@ class ChordNode(Node):
                             ) or self.get_num() == self.get_successor():
             return self.get_successor(), 1
         else:
-            node_id = self.closest_preceding_finger(key)
-            if self.network_api.is_alive(node_id):
-                n_dash = self.network_api.get_node(node_id)
-                succ, hops = n_dash.find_successor(key)
-                return succ, (hops + 1)
-            else:
-                self.__repair_protocol()
+            node_id, i = self.closest_preceding_finger(key)
+            i_orig = i
+            while not self.network_api.is_alive(node_id):
+                node_id, i = self.closest_preceding_finger(node_id - 1)
 
-    def __repair_protocol(self):
-        # Check Predecessor
-        if not self.network_api.is_alive(self.predecessor):
-            self.predecessor = -1
-
-        # Fix Fingers -- Using your own finger table
-        self.__init_finger_table(self.get_num())
+            # Update the node in the finger table from i_orig to i
+            for index in range(i_orig, i + 1):
+                self.finger_table[index]['node'] = node_id
+            n_dash = self.network_api.get_node(node_id)
+            succ, hops = n_dash.find_successor(key)
+            return succ, (hops + 1)
 
     def fetch_keys(self, start, end):
         """Send key-value pair requested by other node
@@ -201,18 +198,11 @@ class ChordNode(Node):
             Dict -- Dictionary of key-value pairs to be transferred
         """
         new_dict = {}
-        for key in self.data_store:
+        for key in list(self.data_store):
             if circular_between(start, key, end) or key == end:
                 new_dict[key] = self.data_store[key]
                 del self.data_store[key]
         return new_dict
-
-    def __move_keys(self):
-        """Transfer keys from successor to current node"""
-        successor = self.network_api.get_node(self.get_successor())
-        fetch_dict = successor.fetch_keys(self.predecessor, self.get_num())
-        for key in fetch_dict:
-            self.data_store[key] = fetch_dict[key]
 
     def __init_finger_table(self, node_id):
         """Initialize finger table for a node which has just joined
@@ -234,7 +224,21 @@ class ChordNode(Node):
         predecessor.set_successor(self.get_num())
         successor.set_predecessor(self.get_num())
 
-        # Fill up the remaining finger table
+        # Update the finger table using node n_dash
+        self.fill_finger_table(node_id)
+
+    def fill_finger_table(self, node_id):
+        """
+        Update finger table of the current node based on finger table of node_id
+        
+        Arguments:
+            node_id {Integer} -- Node Id of the node whose finger table is to 
+            be taken as a reference
+        """
+        global M
+        n_dash = self.network_api.get_node(node_id)
+
+        # Fill up the finger table
         for i in range(M - 1):
             if circular_between(self.get_num(),
                                 self.finger_table[i + 1]['start'],
@@ -245,7 +249,7 @@ class ChordNode(Node):
                                   1]['node'], num_hops = n_dash.find_successor(
                                       self.finger_table[i + 1]['start'])
 
-    def __update_finger_table(self, x, i):
+    def update_finger_table(self, x, i):
         """Update finger table of the current node when a new node x has arrived
         
         Arguments:
@@ -259,7 +263,7 @@ class ChordNode(Node):
                             ['node']) or self.finger_table[i]['start'] == x:
             self.finger_table[i]['node'] = x
             predecessor = self.network_api.get_node(self.predecessor)
-            predecessor.__update_finger_table(x, i)
+            predecessor.update_finger_table(x, i)
 
     def __update_others(self):
         """Update all nodes of the join of current node"""
@@ -269,10 +273,43 @@ class ChordNode(Node):
             prev_id = circular_difference(self.get_num(), int(math.pow(2, i)))
             if self.network_api.is_alive(prev_id):
                 prev_node = self.network_api.get_node(prev_id)
-                prev_node.__update_finger_table(self.get_num(), i)
+                prev_node.update_finger_table(self.get_num(), i)
             p = self.find_predecessor(prev_id)
             p_node = self.network_api.get_node(p)
-            p_node.__update_finger_table(self.get_num(), i)
+            p_node.update_finger_table(self.get_num(), i)
+
+    def notify(self):
+        """Transfer keys from the predecessor to the current node"""
+        predecessor = self.network_api.get_node(self.get_predecessor())
+        fetch_dict = predecessor.fetch_keys(predecessor.get_predecessor(),
+                                            predecessor.get_num())
+        for key in fetch_dict:
+            self.data_store[key] = fetch_dict[key]
+
+    def depart_network(self):
+        """Run method when departing from the network"""
+        # Notify successor of departure -- Successor shall transfer the
+        # requisite keys
+        print('Deleting node: ')
+        print(self)
+        successor = self.network_api.get_node(self.get_successor())
+        successor.notify()
+
+        # Update Predecessor and Successor links
+        predecessor = self.network_api.get_node(self.get_predecessor())
+        predecessor.set_successor(self.get_successor())
+        successor.set_predecessor(self.get_predecessor())
+
+        # Update finger tables of predecessor and successor
+        print('Predecessor finger table update')
+        predecessor.fill_finger_table(successor.get_num())
+        print(predecessor)
+        print('Successor finger table update')
+        successor.fill_finger_table(predecessor.get_num())
+        print(successor)
+
+        # Finally: Depart from network
+        return self.network_api.remove_node(self.get_num())
 
     def join(self):
         """Run when a new node joins the network"""
@@ -288,8 +325,12 @@ class ChordNode(Node):
             # Some node has been found
             self.__init_finger_table(found_node)
             self.__update_others()
+
             # Move keys (predecessor,n] from successor to current node
-            self.__move_keys()
+            successor = self.network_api.get_node(self.get_successor())
+            fetch_dict = successor.fetch_keys(self.predecessor, self.get_num())
+            for key in fetch_dict:
+                self.data_store[key] = fetch_dict[key]
         else:
             # This is the first node in the network
             for i in range(M):
