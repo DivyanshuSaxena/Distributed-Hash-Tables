@@ -75,7 +75,6 @@ def search_queries(network, num_queries):
         if (q % 100 == 0):
             num_epoch += 1
             print(str(num_epoch) + ' epochs completed')
-        q_hash = hash_int(q)
         hit_node = int(hash_int(random.choice(nodes)), 16)
         node = network.get_node(hit_node)
         hops, found = node.search(q)

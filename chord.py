@@ -69,26 +69,53 @@ def search_queries(network, num_queries):
         network {Network}
         num_queries {Integer} -- Number of queries
     """
-    # TODO: Rewrite for Chord
     # Search queries
     num_epoch = 0
     flag = 0
-    for q in range(num_queries):
+    for q in data_store:
+        flag = 0
         if (q % 100 == 0):
             num_epoch += 1
             print(str(num_epoch) + ' epochs completed')
-        q_hash = hash_int(q)
         hit_node = int(hash_int(random.choice(nodes)), 16)
         node = network.get_node(hit_node)
-        found = node.search(q)
-        in_list = q in nodes
-        if (in_list and found != -1) or (not in_list and found == -1):
-            continue
-        flag = 1
-        print('Couldn\'t find node ' + str(q) + ' correctly')
+        hops, chord_value = node.search(q)
+        if chord_value == -1:
+            try:
+                global_value = data_store[q]
+                flag = 1
+                print(
+                    str(q) + ': Found ' + str(global_value) +
+                    ' when not stored')
+            except:
+                continue
+        else:
+            try:
+                global_value = data_store[q]
+                if (chord_value != global_value):
+                    print(
+                        str(q) + ': Found ' + str(global_value) + ' when ' +
+                        str(chord_value) + ' stored')
+                    flag = 1
+            except:
+                flag = 1
+        if flag == 1:
+            print('Couldn\'t find node ' + str(q) + ' correctly')
 
     if flag == 0:
         print('All queries ran successfully')
+
+
+def store_keys(network, num_keys):
+    for key in range(num_keys):
+        value = random.randint(0, 2 * num_keys)
+        # Choose a random node and store in it
+        rand_node = int(hash_int(random.choice(nodes)), 16)
+        node = network.get_node(rand_node)
+        is_stored = node.store_key(key, value)
+        if is_stored == 0:
+            # Also store in the global array
+            data_store[key] = value
 
 
 def delete_nodes(network, del_nodes):
@@ -114,6 +141,7 @@ network = Network(num_switches, read_from_file)
 
 # Initialize network
 init_network(network, num_nodes)
-# search_queries(network, num_queries)
-# delete_nodes(network, 50)
-# search_queries(network, num_queries)
+store_keys(network, num_queries)
+search_queries(network, num_queries)
+delete_nodes(network, 50)
+search_queries(network, num_queries)

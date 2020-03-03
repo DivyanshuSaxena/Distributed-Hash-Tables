@@ -1,5 +1,6 @@
 """Class Definition for ChordNode"""
 import math
+import hashlib
 from modules.network import Node
 
 M = 0
@@ -37,6 +38,21 @@ def circular_difference(num1, num2):
         return num1 - num2
     else:
         return int(math.pow(2, M)) + num1 - num2
+
+
+def hash_key(integer):
+    """Hash the given integers and trim to l digits
+    
+    Arguments:
+        integer {Integer}
+    
+    Returns:
+        Integer -- Hashed Integer Value
+    """
+    name = str(integer)
+    m = hashlib.sha1(name.encode('utf-8'))
+    key_hash = m.hexdigest()[:M // 4]
+    return int(key_hash[2:], 16)
 
 
 # Each entry of the finger table is a tuple of two as follows:
@@ -159,9 +175,20 @@ class ChordNode(Node):
             return self.get_successor(), 1
         else:
             node_id = self.closest_preceding_finger(key)
-            n_dash = self.network_api.get_node(node_id)
-            succ, hops = n_dash.find_successor(key)
-            return succ, (hops + 1)
+            if self.network_api.is_alive(node_id):
+                n_dash = self.network_api.get_node(node_id)
+                succ, hops = n_dash.find_successor(key)
+                return succ, (hops + 1)
+            else:
+                self.__repair_protocol()
+
+    def __repair_protocol(self):
+        # Check Predecessor
+        if not self.network_api.is_alive(self.predecessor):
+            self.predecessor = -1
+
+        # Fix Fingers -- Using your own finger table
+        self.__init_finger_table(self.get_num())
 
     def fetch_keys(self, start, end):
         """Send key-value pair requested by other node
@@ -214,8 +241,9 @@ class ChordNode(Node):
                                 self.finger_table[i]['node']):
                 self.finger_table[i + 1]['node'] = self.finger_table[i]['node']
             else:
-                self.finger_table[i + 1]['node'], num_hops = n_dash.find_successor(
-                    self.finger_table[i + 1]['start'])
+                self.finger_table[i +
+                                  1]['node'], num_hops = n_dash.find_successor(
+                                      self.finger_table[i + 1]['start'])
 
     def __update_finger_table(self, x, i):
         """Update finger table of the current node when a new node x has arrived
@@ -278,9 +306,28 @@ class ChordNode(Node):
         Returns:
             Integer, Integer -- Num hops, Value of the key if present, else -1
         """
-        best_node, num_hops = self.find_successor(key)
-        # Check if best_node has key or not
+        store_key = hash_key(key)
+        best_node, num_hops = self.find_successor(store_key)
+        # Check if best_node has store_key or not
         node = self.network_api.get_node(best_node)
-        if key in node.data_store:
-            return num_hops, node.data_store[key]
+        if store_key in node.data_store:
+            return num_hops, node.data_store[store_key]
         return num_hops, -1
+
+    def store_key(self, key, val):
+        """Stores the (key, value) pair at the requisite node on the network
+        
+        Arguments:
+            key {Integer} -- Key Value
+            val {Integer} -- Value
+        
+        Returns:
+            Integer -- Returns -1 if key couldn't be stored, else returns 0
+        """
+        stored_key = hash_key(key)
+        key_node, num_hops = self.find_successor(stored_key)
+        node = self.network_api.get_node(key_node)
+        if stored_key in node.data_store:
+            return -1
+        node.data_store[stored_key] = val
+        return 0
