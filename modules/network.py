@@ -175,6 +175,8 @@ class Network:
             s1 = self.switch_to_node[n1]
             s2 = self.switch_to_node[n2]
 
+            return abs(s2 - s1)
+
             if self.__proximity[s1][s2] != -1:
                 return self.__proximity[s1][s2]
 
@@ -185,14 +187,21 @@ class Network:
                 visited[_q] = 1
             visited[s1] = 1
 
-            depth = 1
+            depth = 0
             found_switch = 0
             while len(queue) != 0:
+                depth += 1
                 next_queue = []
+                if s2 in queue:
+                    break
                 for next_switch in queue:
                     if next_switch == s2:
                         found_switch = 1
                         break
+                    elif self.__proximity[next_switch][s2] != -1:
+                        found_switch = 1
+                        depth = self.__proximity[next_switch][s2] + depth
+                    
                     _nq = self.dict[next_switch]
                     for _sw in _nq:
                         if _sw not in visited:
@@ -200,7 +209,6 @@ class Network:
                             visited[_sw] = 1
                 if found_switch != 0:
                     break
-                depth += 1
                 queue = next_queue
 
             self.__proximity[s1][s2] = depth

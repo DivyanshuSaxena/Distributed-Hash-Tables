@@ -20,7 +20,7 @@ nodes = []
 
 l = 6
 b = 4
-num_queries = 1000
+num_queries = 100000
 
 
 def hash_int(integer):
@@ -112,5 +112,5 @@ network = Network(num_switches, read_from_file)
 # Initialize network
 init_network(network, num_nodes)
 search_queries(network, num_queries)
-delete_nodes(network, 50)
+delete_nodes(network, num_nodes//2)
 search_queries(network, num_queries)
