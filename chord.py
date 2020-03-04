@@ -6,6 +6,7 @@ import math
 import sys
 import random
 import hashlib
+import matplotlib.pyplot as plt
 from chord_node import ChordNode
 from modules.network import Network
 
@@ -21,7 +22,17 @@ data_store = {}
 
 l = 6
 m = 24
-num_queries = 1000
+num_points = 10000
+num_queries = 1000000
+
+
+def plot_histogram(dict):
+    plt.bar(dict.keys(), dict.values())
+    plt.xlim(0, 14)
+    plt.ylim(0, 0.6)
+    plt.xlabel('Number of Hops')
+    plt.ylabel('Probability')
+    plt.show()
 
 
 def hash_int(integer):
@@ -69,45 +80,71 @@ def search_queries(network, num_queries):
         network {Network}
         num_queries {Integer} -- Number of queries
     """
-    # Search queries
+    hops_hist = {}
     num_epoch = 0
     flag = 0
-    for q in data_store:
-        flag = 0
-        if (q % 100 == 0):
-            num_epoch += 1
-            print(str(num_epoch) + ' epochs completed')
-        hit_node = int(hash_int(random.choice(nodes)), 16)
-        node = network.get_node(hit_node)
-        hops, chord_value = node.search(q)
-        if chord_value == -1:
-            try:
-                global_value = data_store[q]
-                flag = 1
-                print(
-                    str(q) + ': Found ' + str(global_value) +
-                    ' when not stored')
-            except:
-                continue
-        else:
-            try:
-                global_value = data_store[q]
-                if (chord_value != global_value):
-                    print(
-                        str(q) + ': Found ' + str(global_value) + ' when ' +
-                        str(chord_value) + ' stored')
+    count = 0
+    for _ in range(100):
+        for q in data_store:
+            flag = 0
+            count += 1
+            if (count % 10000 == 0):
+                num_epoch += 1
+                print(str(num_epoch) + ' epochs completed')
+            hit_node = int(hash_int(random.choice(nodes)), 16)
+            node = network.get_node(hit_node)
+            hops, chord_value = node.search(q)
+            # Add in histogram
+            hops = 12 if hops > 12 else hops
+            if hops in hops_hist:
+                hops_hist[hops] += 1
+            else:
+                hops_hist[hops] = 1
+
+            if chord_value == -1:
+                try:
+                    global_value = data_store[q]
                     flag = 1
-            except:
-                flag = 1
-        if flag == 1:
-            print('Couldn\'t find node ' + str(q) + ' correctly')
+                    print(
+                        str(q) + ': Found ' + str(global_value) +
+                        ' when not stored')
+                except:
+                    continue
+            else:
+                try:
+                    global_value = data_store[q]
+                    if (chord_value != global_value):
+                        print(
+                            str(q) + ': Found ' + str(global_value) +
+                            ' when ' + str(chord_value) + ' stored')
+                        flag = 1
+                except:
+                    flag = 1
+            if flag == 1:
+                print('Couldn\'t find node ' + str(q) + ' correctly')
 
     if flag == 0:
         print('All queries ran successfully')
 
+    new_dict = {}
+    avg_hops = 0
+    for k in hops_hist:
+        new_dict[k] = hops_hist[k] / num_queries
+        avg_hops += (new_dict[k] * k)
+    print(avg_hops)
+    plot_histogram(new_dict)
+
 
 def store_keys(network, num_keys):
-    for key in range(num_keys):
+    """Store keys in the Chord Network
+    
+    Arguments:
+        network {Network}
+        num_keys {Integer}
+    """
+    global num_points
+    count = 0
+    for key in range(2 * num_keys):
         value = random.randint(0, 2 * num_keys)
         # Choose a random node and store in it
         rand_node = int(hash_int(random.choice(nodes)), 16)
@@ -115,7 +152,10 @@ def store_keys(network, num_keys):
         is_stored = node.store_key(key, value)
         if is_stored == 0:
             # Also store in the global array
+            count += 1
             data_store[key] = value
+            if count == num_points:
+                break
 
 
 def delete_nodes(network, del_nodes):
@@ -141,7 +181,7 @@ network = Network(num_switches, read_from_file)
 
 # Initialize network
 init_network(network, num_nodes)
-store_keys(network, num_queries)
+store_keys(network, num_points)
 search_queries(network, num_queries)
-delete_nodes(network, 50)
+delete_nodes(network, num_nodes // 2)
 search_queries(network, num_queries)

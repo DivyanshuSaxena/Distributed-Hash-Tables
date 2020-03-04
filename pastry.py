@@ -6,6 +6,7 @@ import math
 import sys
 import random
 import hashlib
+import matplotlib.pyplot as plt
 from pastry_node import PastryNode
 from modules.network import Network
 
@@ -17,10 +18,20 @@ if len(sys.argv) == 2:
 num_nodes = int(sys.argv[1])
 read_from_file = bool(int(sys.argv[2]))
 nodes = []
+nodes_hash = []
 
 l = 6
 b = 4
-num_queries = 100000
+num_queries = 1000000
+
+
+def plot_histogram(dict):
+    plt.bar(dict.keys(), dict.values())
+    plt.xlim(0, 12)
+    plt.ylim(0, 0.8)
+    plt.xlabel('Number of Hops')
+    plt.ylabel('Probability')
+    plt.show()
 
 
 def hash_int(integer):
@@ -57,6 +68,7 @@ def init_network(network, num_nodes):
             pn.join()
             num_added += 1
             nodes.append(i)
+            nodes_hash.append(int(node_hash, 16))
         if num_added == num_nodes:
             break
 
@@ -68,24 +80,44 @@ def search_queries(network, num_queries):
         network {Network}
         num_queries {Integer} -- Number of queries
     """
-    # Search queries
+    hops_hist = {}
     num_epoch = 0
     flag = 0
-    for q in range(num_queries):
-        if (q % 100 == 0):
-            num_epoch += 1
-            print(str(num_epoch) + ' epochs completed')
-        hit_node = int(hash_int(random.choice(nodes)), 16)
-        node = network.get_node(hit_node)
-        hops, found = node.search(q)
-        in_list = q in nodes
-        if (in_list and found != -1) or (not in_list and found == -1):
-            continue
-        flag = 1
-        print('Couldn\'t find node ' + str(q) + ' correctly')
+    count = 0
+    for _ in range(100):
+        for q in range(num_queries // 100):
+            count += 1
+            if (count % 10000 == 0):
+                num_epoch += 1
+                print(str(num_epoch) + ' epochs completed')
+            hit_node = int(hash_int(random.choice(nodes)), 16)
+            node = network.get_node(hit_node)
+            hops, found = node.search(q)
+
+            # Add in histogram
+            hops = 10 if hops > 10 else hops
+            if hops in hops_hist:
+                hops_hist[hops] += 1
+            else:
+                hops_hist[hops] = 1
+            q_hash = int(hash_int(q), 16)
+            in_list = q_hash in nodes_hash
+            if (in_list and found != -1) or (not in_list and found == -1):
+                continue
+            flag = 1
+            print(in_list, found)
+            print('Couldn\'t find node ' + str(q) + ' correctly')
 
     if flag == 0:
         print('All queries ran successfully')
+
+    new_dict = {}
+    avg_hops = 0
+    for k in hops_hist:
+        new_dict[k] = hops_hist[k] / num_queries
+        avg_hops += (new_dict[k] * k)
+    print(avg_hops)
+    plot_histogram(new_dict)
 
 
 def delete_nodes(network, del_nodes):
@@ -103,6 +135,7 @@ def delete_nodes(network, del_nodes):
         if removed:
             num_deleted += 1
             nodes.remove(chosen_node)
+            nodes_hash.remove(int(hash_int(chosen_node), 16))
 
 
 # Number of switches :- Max number of nodes that can be added onto the network
@@ -112,5 +145,5 @@ network = Network(num_switches, read_from_file)
 # Initialize network
 init_network(network, num_nodes)
 search_queries(network, num_queries)
-delete_nodes(network, num_nodes//2)
+delete_nodes(network, num_nodes // 2)
 search_queries(network, num_queries)

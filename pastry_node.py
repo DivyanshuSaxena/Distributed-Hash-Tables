@@ -329,8 +329,12 @@ class PastryNode(Node):
                     l = row_index
                     d = node_index
         if l != -1 and d != -1:
-            for node in itertools.chain(self.routing_table[l],
-                                        self.routing_table[l + 1]):
+            if l < length - 1:
+                iterlist = itertools.chain(self.routing_table[l],
+                                           self.routing_table[l + 1])
+            else:
+                iterlist = self.routing_table[l]
+            for node in iterlist:
                 if node != failed_node and self.network_api.is_alive(node):
                     contact_list.append(node)
 

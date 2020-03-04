@@ -52,7 +52,7 @@ def hash_key(integer):
     name = str(integer)
     m = hashlib.sha1(name.encode('utf-8'))
     key_hash = m.hexdigest()[:M // 4]
-    return int(key_hash[2:], 16)
+    return int(key_hash, 16)
 
 
 # Each entry of the finger table is a tuple of two as follows:
@@ -168,7 +168,7 @@ class ChordNode(Node):
         # print('Finding successor for ' + str(key) + ' at ' +
         #       str(self.get_num()))  # Debug
         if self.get_num() == key:
-            return self.get_num()
+            return self.get_num(), 0
 
         if circular_between(self.get_num(), key,
                             self.get_successor()) or key == self.get_successor(
@@ -301,12 +301,8 @@ class ChordNode(Node):
         successor.set_predecessor(self.get_predecessor())
 
         # Update finger tables of predecessor and successor
-        print('Predecessor finger table update')
         predecessor.fill_finger_table(successor.get_num())
-        print(predecessor)
-        print('Successor finger table update')
         successor.fill_finger_table(predecessor.get_num())
-        print(successor)
 
         # Finally: Depart from network
         return self.network_api.remove_node(self.get_num())
