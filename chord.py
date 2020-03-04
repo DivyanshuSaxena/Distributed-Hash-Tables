@@ -93,7 +93,8 @@ def search_queries(network, num_queries):
                 print(str(num_epoch) + ' epochs completed')
             hit_node = int(hash_int(random.choice(nodes)), 16)
             node = network.get_node(hit_node)
-            hops, chord_value = node.search(q)
+            hops, chord_value, path = node.search(q)
+            print('Lookup ' + str(q) + ': ' + str(path))
             # Add in histogram
             hops = 12 if hops > 12 else hops
             if hops in hops_hist:
@@ -122,6 +123,10 @@ def search_queries(network, num_queries):
                     flag = 1
             if flag == 1:
                 print('Couldn\'t find node ' + str(q) + ' correctly')
+            if count >= num_queries:
+                break
+        if count >= num_queries:
+            break
 
     if flag == 0:
         print('All queries ran successfully')
@@ -185,3 +190,10 @@ store_keys(network, num_points)
 search_queries(network, num_queries)
 delete_nodes(network, num_nodes // 2)
 search_queries(network, num_queries)
+
+print('Total number of nodes: ' + str(num_nodes))
+print('Total number of data points: ' + str(num_points))
+print('Total number of search queries: ' + str(num_queries))
+print('Total number of node add queries: ' + str(num_nodes))
+print('Total number of node delete queries: ' + str(num_nodes // 2))
+print('Total number of data add queries: ' + str(num_queries))

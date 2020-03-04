@@ -22,6 +22,7 @@ nodes_hash = []
 
 l = 6
 b = 4
+num_points = 10000
 num_queries = 1000000
 
 
@@ -147,3 +148,10 @@ init_network(network, num_nodes)
 search_queries(network, num_queries)
 delete_nodes(network, num_nodes // 2)
 search_queries(network, num_queries)
+
+print('Total number of nodes: ' + str(num_nodes))
+print('Total number of data points: ' + str(num_points))
+print('Total number of search queries: ' + str(num_queries))
+print('Total number of node add queries: ' + str(num_nodes))
+print('Total number of node delete queries: ' + str(num_nodes//2))
+print('Total number of data add queries: ' + str(num_queries))

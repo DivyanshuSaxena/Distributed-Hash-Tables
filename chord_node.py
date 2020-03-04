@@ -151,7 +151,7 @@ class ChordNode(Node):
         if self.get_num() == key:
             return self.predecessor
 
-        key_successor, num_hops = self.find_successor(key)
+        key_successor, num_hops, path = self.find_successor(key)
         n_dash = self.network_api.get_node(key_successor)
         return n_dash.get_predecessor()
 
@@ -162,18 +162,19 @@ class ChordNode(Node):
             key {Integer} -- Key whose successor is to be found
         
         Returns:
-            Integer, Integer -- Node Id of the successor node, Num hops
+            Integer, Integer, List -- Node Id of the successor node, Num hops
+                                      List
         """
         # Return the node itself when the key is on the node
         # print('Finding successor for ' + str(key) + ' at ' +
         #       str(self.get_num()))  # Debug
         if self.get_num() == key:
-            return self.get_num(), 0
+            return self.get_num(), 0, [self.get_num()]
 
         if circular_between(self.get_num(), key,
                             self.get_successor()) or key == self.get_successor(
                             ) or self.get_num() == self.get_successor():
-            return self.get_successor(), 1
+            return self.get_successor(), 1, [self.get_successor()]
         else:
             node_id, i = self.closest_preceding_finger(key)
             i_orig = i
@@ -184,8 +185,10 @@ class ChordNode(Node):
             for index in range(i_orig, i + 1):
                 self.finger_table[index]['node'] = node_id
             n_dash = self.network_api.get_node(node_id)
-            succ, hops = n_dash.find_successor(key)
-            return succ, (hops + 1)
+            l_path = [node_id]
+            succ, hops, path = n_dash.find_successor(key)
+            l_path.extend(path)
+            return succ, (hops + 1), l_path
 
     def fetch_keys(self, start, end):
         """Send key-value pair requested by other node
@@ -214,7 +217,7 @@ class ChordNode(Node):
         n_dash = self.network_api.get_node(node_id)
 
         # Initialize first entry and successor
-        self.finger_table[0]['node'], num_hops = n_dash.find_successor(
+        self.finger_table[0]['node'], num_hops, path = n_dash.find_successor(
             self.finger_table[0]['start'])
 
         # Update successor and predecessor links
@@ -245,9 +248,9 @@ class ChordNode(Node):
                                 self.finger_table[i]['node']):
                 self.finger_table[i + 1]['node'] = self.finger_table[i]['node']
             else:
-                self.finger_table[i +
-                                  1]['node'], num_hops = n_dash.find_successor(
-                                      self.finger_table[i + 1]['start'])
+                self.finger_table[
+                    i + 1]['node'], num_hops, path = n_dash.find_successor(
+                        self.finger_table[i + 1]['start'])
 
     def update_finger_table(self, x, i):
         """Update finger table of the current node when a new node x has arrived
@@ -341,15 +344,16 @@ class ChordNode(Node):
             key {Integer} -- Key to be searched
         
         Returns:
-            Integer, Integer -- Num hops, Value of the key if present, else -1
+            Integer, Integer, List -- Num hops,
+                                      Value of the key if present, else -1, Path
         """
         store_key = hash_key(key)
-        best_node, num_hops = self.find_successor(store_key)
+        best_node, num_hops, path = self.find_successor(store_key)
         # Check if best_node has store_key or not
         node = self.network_api.get_node(best_node)
         if store_key in node.data_store:
-            return num_hops, node.data_store[store_key]
-        return num_hops, -1
+            return num_hops, node.data_store[store_key], path
+        return num_hops, -1, []
 
     def store_key(self, key, val):
         """Stores the (key, value) pair at the requisite node on the network
@@ -362,7 +366,7 @@ class ChordNode(Node):
             Integer -- Returns -1 if key couldn't be stored, else returns 0
         """
         stored_key = hash_key(key)
-        key_node, num_hops = self.find_successor(stored_key)
+        key_node, num_hops, path = self.find_successor(stored_key)
         node = self.network_api.get_node(key_node)
         if stored_key in node.data_store:
             return -1
