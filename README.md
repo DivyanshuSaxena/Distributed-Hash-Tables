@@ -21,8 +21,8 @@ For further details, check the docstring in each of the python files.
 
 ### Pastry Object Location Service
 
-```bash
-python pastry.py <num-nodes-in-network> <whether-to-read-network-configuration-from-file (0/1)>
+```console
+>>> python pastry.py <num-nodes-in-network> <whether-to-read-network-configuration-from-file (0/1)>
 ```
 
 #### Parameters
@@ -37,8 +37,8 @@ To change the parameters, go to [pastry.py](https://github.com/DivyanshuSaxena/D
 
 ### Chord Peer to Peer DHT
 
-```bash
-python chord.py <num-nodes-in-network> <whether-to-read-network-configuration-from-file (0/1)>
+```console
+>>> python chord.py <num-nodes-in-network> <whether-to-read-network-configuration-from-file (0/1)>
 ```
 
 #### Parameters
