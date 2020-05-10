@@ -3,6 +3,7 @@
 Implementation of the Pastry ([paper](http://rowstron.azurewebsites.net/PAST/pastry.pdf)) and Chord ([paper](https://pdos.csail.mit.edu/papers/chord:sigcomm01/chord_sigcomm.pdf)) DHT Protocols, as part of assignment for course [COL819 - Spring 2020](http://www.cse.iitd.ac.in/~srsarangi/courses/2020/col_819_2020/index.html) at IIT Delhi.
 
 ## Repository Structure
+```
 .  
 ├── chord_node.py  
 ├── chord.py  
@@ -14,6 +15,7 @@ Implementation of the Pastry ([paper](http://rowstron.azurewebsites.net/PAST/pas
 ├── pastry_node.py  
 ├── pastry.py  
 └── README.md  
+```
 
 For further details, check the docstring in each of the python files.
 
